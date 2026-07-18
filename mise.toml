@@ -1,0 +1,17 @@
+# mise — HOST-side developer tooling for Drone SITL
+# https://mise.jdx.dev/
+#
+# Scope: tools a developer runs on the HOST, *around* the container — pre-commit
+# hooks and config/doc linters. mise is intentionally NOT used inside the
+# container; the container's runtime (Ubuntu, ROS 2, Gazebo, system Python) is
+# pinned by `Containerfile`, and the Rust toolchain by `rust-toolchain.toml`.
+# Do not add rust/python here — that would create a second source of truth.
+
+[tools]
+pre-commit = "latest"   # git hooks run on the host before committing
+shellcheck = "latest"   # lint shell in Makefile recipes / scripts
+yamllint = "latest"     # lint compose.yaml and CI config
+
+[tasks.setup]
+description = "Install host dev tools and git hooks"
+run = "pre-commit install"

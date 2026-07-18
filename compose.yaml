@@ -1,0 +1,42 @@
+# Podman Compose — Drone SITL development & simulation environment
+#
+#   podman compose build          # build the dev image
+#   podman compose up -d dev      # start the dev container
+#   podman compose exec dev bash  # get a shell inside it
+#
+# GUI apps (Gazebo, RViz) need X11 access from the host. On most Linux hosts:
+#   xhost +local:  (once per session)  — see README.md for Wayland/rootless notes.
+
+services:
+  # Primary development + simulation container.
+  # Holds the ROS 2 workspace, PX4 SITL, Gazebo, Rust and Python toolchains.
+  dev:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: drone-sitl:dev
+    container_name: drone-sitl-dev
+    # Host networking simplifies the PX4 <-> uXRCE-DDS <-> ROS 2 traffic.
+    network_mode: host
+    ipc: host
+    environment:
+      - ROS_DISTRO=lyrical
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      # X11 forwarding for Gazebo / RViz GUIs.
+      - DISPLAY=${DISPLAY:-:0}
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      # Live-mount the repo so edits on the host are reflected inside.
+      - .:/workspace:Z
+      # X11 socket for GUI tools.
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # Persist Rust build/toolchain caches across container restarts.
+      - drone-sitl-cargo:/root/.cargo
+      - drone-sitl-rustup:/root/.rustup
+    working_dir: /workspace
+    # Keep the container alive for `exec`-based interactive workflows.
+    command: sleep infinity
+
+volumes:
+  drone-sitl-cargo:
+  drone-sitl-rustup:

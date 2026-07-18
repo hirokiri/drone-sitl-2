@@ -1,0 +1,8 @@
+# Pins the Rust toolchain for the perf-core ROS 2 nodes (perception / estimation).
+# rustup honors this file automatically, both for the in-container `colcon`
+# build and for host-side `rust-analyzer`. It is the single source of truth for
+# the Rust version — do not pin Rust in mise.toml.
+[toolchain]
+channel = "1.85"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
