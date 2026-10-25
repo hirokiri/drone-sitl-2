@@ -6,7 +6,7 @@ its global position from its camera via **visual map-matching**.
 
 - **Autopilot:** PX4 SITL · **Simulator:** Gazebo Jetty · **Middleware:** ROS 2 Lyrical
 - **Perf core:** Rust (perception / estimation) · **Glue:** Python (orchestration, analysis)
-- **Environment:** Podman container, driven through a `Makefile` (host tooling via `mise`)
+- **Environment:** Podman container, driven through a `Makefile` (dev tooling via `mise`)
 
 > 📄 Full specification: [`docs/specs/overview.md`](docs/specs/overview.md)
 
@@ -62,7 +62,7 @@ tools/          Offline pipelines (e.g. map builder)
 compose.yaml         Podman Compose dev/sim environment
 Containerfile        Dev/sim image (container runtime = source of version truth)
 rust-toolchain.toml  Pinned Rust toolchain (rustup)
-mise.toml            Host-side dev tools (NOT used in container)
+mise.toml            Dev tools (pre-commit, linters) for host and container
 Makefile             Developer workflow entrypoints
 ```
 
@@ -82,6 +82,42 @@ in `compose.yaml` if your display is not `:0`.
 - Format / lint: `make fmt` · `make lint`
 - Test: `make test`
 - Contributor & agent conventions: [`AGENTS.md`](AGENTS.md)
+
+### Git & SSH inside the container
+
+`compose.yaml` mounts your host git/SSH configuration **read-only** into the
+container (which runs as `root`, so paths land under `/root`):
+
+| Host | Purpose |
+|------|---------|
+| `~/.ssh` | keys, `config`, `known_hosts` |
+| `~/.gitconfig` | identity, aliases, credential helpers |
+| `~/.config/gh`, `~/.git-credentials` | tokens for the `gh` / `store` credential helpers |
+| `$SSH_AUTH_SOCK` | forwarded `ssh-agent` (passphrase-protected / hardware keys) |
+
+`gh` and `openssh-client` are installed in the image, so `git commit` /
+`git push` (HTTPS or SSH) and private `cargo` git dependencies work inside
+`make shell` exactly as on the host. Notes:
+
+- Every path in the table must exist on the host or the bind mount fails;
+  `touch ~/.git-credentials` / `mkdir -p ~/.config/gh` if you don't use them.
+- Start the agent and `ssh-add` your key **before** `make up`; the socket path
+  is captured when the container is created. Without an agent, ssh falls back
+  to the key files in `~/.ssh`.
+- `~/.ssh` is read-only, so ssh cannot append to `known_hosts` for hosts you
+  have never connected to from the host. Connect once from the host first.
+- GPG commit signing is not set up in the image.
+
+### Tools inside the container
+
+Besides the ROS 2 / Rust / Python toolchains, the image ships `tmux`, `git`,
+`gh`, `mise` and the **Claude Code CLI** (`claude`). Your host `~/.claude` and
+`~/.claude.json` are mounted read-write, so `claude` inside `make shell` is
+already logged in and shares settings, plugins and memory with the host.
+`mise` is activated in interactive shells and trusts the repo's `mise.toml`;
+run `mise install` once to fetch pre-commit and the linters (they persist in
+the `drone-sitl-mise` volume). `mise.toml` must never pin python or rust — the
+system Python belongs to ROS 2 and Rust comes from `rust-toolchain.toml`.
 
 ## Status
 

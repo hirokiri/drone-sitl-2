@@ -25,14 +25,39 @@ services:
       # X11 forwarding for Gazebo / RViz GUIs.
       - DISPLAY=${DISPLAY:-:0}
       - QT_X11_NO_MITSHM=1
+      # Point ssh/git at the host's agent socket (bind-mounted below).
+      - SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock
+      # ~/.config/gh is mounted read-only; stop gh trying to write there.
+      - GH_NO_UPDATE_NOTIFIER=1
     volumes:
-      # Live-mount the repo so edits on the host are reflected inside.
-      - .:/workspace:Z
+      # Live-mount the repo so edits on the host a>re reflected inside.
+      - .:/drone-sitl-2:Z
       # X11 socket for GUI tools.
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      # Persist Rust build/toolchain caches across container restarts.
+      # Reuse the host's SSH keys/config and git identity (read-only) so that
+      # `git push`, cargo git dependencies, etc. behave inside the container
+      # exactly as on the host. The container runs as root; under rootless
+      # Podman the host user is mapped to root, so ownership/permissions match.
+      - ${HOME}/.ssh:/root/.ssh:ro
+      - ${HOME}/.gitconfig:/root/.gitconfig:ro
+      # Git credential helpers referenced from ~/.gitconfig: `gh auth
+      # git-credential` (token lives in ~/.config/gh) and `store`
+      # (~/.git-credentials). `gh` itself is installed in the image.
+      - ${HOME}/.config/gh:/root/.config/gh:ro
+      - ${HOME}/.git-credentials:/root/.git-credentials:ro
+      # Forward the host's ssh-agent (passphrase-protected / hardware keys).
+      # If no agent is running, /dev/null is bound instead and ssh silently
+      # falls back to the key files in ~/.ssh.
+      - ${SSH_AUTH_SOCK:-/dev/null}:/run/host-services/ssh-auth.sock
+      # Claude Code CLI: reuse the host's login, settings, plugins and memory.
+      # Read-write because the CLI persists session state there.
+      - ${HOME}/.claude:/root/.claude
+      - ${HOME}/.claude.json:/root/.claude.json
+      # Persist Rust build/toolchain caches and mise-installed tools
+      # (mise.toml) across container restarts.
       - drone-sitl-cargo:/root/.cargo
       - drone-sitl-rustup:/root/.rustup
+      - drone-sitl-mise:/root/.local/share/mise
     working_dir: /workspace
     # Keep the container alive for `exec`-based interactive workflows.
     command: sleep infinity
@@ -40,3 +65,4 @@ services:
 volumes:
   drone-sitl-cargo:
   drone-sitl-rustup:
+  drone-sitl-mise:
