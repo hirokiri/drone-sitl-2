@@ -184,7 +184,8 @@ fallback binding):
 | Perf core | **Rust** (stable) | Perception/estimation nodes via `rclrs`/`r2r`. |
 | Glue / tooling | **Python 3.13** | Orchestration, injection, analysis, launch. |
 | Containers | **Podman** + Compose | Dev/sim runtime and the source of version truth for everything *inside* the container; see `compose.yaml` / `Containerfile`. |
-| Host toolchain | **mise** (`mise.toml`) | Provisions **host-side** dev tools only (outside the container). Deliberately not run inside the container. |
+| Dev tooling | **mise** (`mise.toml`) | Provisions auxiliary dev tools (pre-commit, linters) on the host **and** in the container. Deliberately never pins python/rust. |
+| Dev conveniences (container) | `tmux`, `git`/`gh`, Claude Code CLI | Installed in the image; host `~/.ssh`, `~/.gitconfig`, credential stores and `~/.claude` are bind-mounted so they work with the host identity. |
 | Rust toolchain | **rustup** via `rust-toolchain.toml` | Pins the Rust version used by `colcon` in-container; also honored by host `rust-analyzer`. |
 | Task runner | **Make** | `Makefile` wraps common workflows. |
 
@@ -192,16 +193,18 @@ fallback binding):
 
 The environment has **two layers with a deliberate boundary**:
 
-- **Host — `mise`** (`mise.toml`) pins the tools a developer runs *outside* the
-  container: the Podman/Compose CLI helpers, formatters/linters used in
-  pre-commit, and optionally a host Rust toolchain for editor support
-  (`rust-analyzer`). This makes host setup one command and reproducible without
-  touching the container's runtime.
+- **Dev tools — `mise`** (`mise.toml`) pins the tools a developer runs
+  *around* the build: pre-commit and the formatters/linters it invokes. It is
+  installed on the host (one-command setup) and in the dev container, so the
+  same pinned versions apply in both places. It **never** pins python or rust.
 - **Container — `Containerfile`** is the **authoritative runtime** and the
   single source of version truth for everything that actually runs: Ubuntu
   26.04, ROS 2 Lyrical, Gazebo Jetty, apt packages, and the **system Python**
-  used by `rclpy`/`ament`/`colcon`. `mise` is intentionally **not** run inside
-  the container, so it never shadows the system interpreter ROS 2 requires.
+  used by `rclpy`/`ament`/`colcon`. Because `mise.toml` carries no python/rust,
+  `mise` inside the container cannot shadow the interpreter ROS 2 requires.
+  The image also ships developer conveniences (`tmux`, `git`, `gh`, Claude Code
+  CLI) and `compose.yaml` bind-mounts the host's `~/.ssh`, `~/.gitconfig`,
+  credential stores and `~/.claude` so they run with the host identity.
 - **Rust — `rust-toolchain.toml`** pins the Rust version; `rustup` honors it
   both for the in-container `colcon` build and for host-side `rust-analyzer`.
 - **`Makefile`** exposes the common workflow as memorable targets, e.g.
@@ -218,7 +221,7 @@ drone-sitl-2/
 ├── Makefile                 # Developer workflow entrypoints
 ├── compose.yaml             # Podman Compose dev/sim environment
 ├── Containerfile            # Dev/sim image definition
-├── mise.toml                # Host-side dev tools (mise) — NOT used in container
+├── mise.toml                # Dev tools (pre-commit, linters) — host + container
 ├── rust-toolchain.toml      # Pinned Rust toolchain (rustup)
 ├── docs/
 │   └── specs/
